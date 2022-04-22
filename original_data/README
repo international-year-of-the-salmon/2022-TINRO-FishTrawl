@@ -1,0 +1,11 @@
+# README
+
+Notes from Aleksey Somov:
+
+- Salmon_fish samples collected.xlsx - I prepared "Gill_samples.xlsx" file and put some description there, but I didn't create "Salmon_fish samples collected.xlsx". Probably Evgeny did. BTW, NP Scales means that scales were collected from non-preferred area (see section 15 of the cruise plan)
+
+- Gill_samples.xlsx - is the file containing all the information about salmon specimen. Perhaps it worth renaming.
+
+-  Galslist.csv – It is the coordinates of the TINRO reported every 5 min.
+
+- Salmon wounds (photos)  - each photo must contain number of certain fish. Information about wounds/scars/marks is in the "Gill_samples.xlsx" - see column "Marks/scars". Data there is encoded according to the Cruise plan section 14.
