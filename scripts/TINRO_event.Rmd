@@ -21,40 +21,53 @@ library(uuid)
 Download the data.
 
 ```{r file_download}
-# drive_download(file = "https://docs.google.com/spreadsheets/d/1Teh8Lcj3vCxocB2HPso19XYrZvCUspFt/edit#gid=1038314498", 
-#                path = here::here("Trawl", "2019", "raw_data", "2019_GoA_Fish_Trawl_catchdata.xlsx"),
-#                overwrite = TRUE)
-
-# ... <- read_excel(here("IYS2022_TINRO.xlsx", sheet = "2. CRUISE_INSTRUMENT")) # etc
-
-tinro_data_dictionary <- read_excel("IYS2022_TINRO.xlsx", sheet = "2. CRUISE_INSTRUMENT")
-tinro_event_info <- read_excel("IYS2022_TINRO.xlsx", sheet = "4. SAMPLING EVENT INFO")
-tinro_catch <- read_excel("IYS2022_TINRO.xlsx", sheet = "5. CATCH_FINAL INFO")
+tinro_data_dictionary <- read_excel(here("IYS_data_template", "IYS2022_TINRO.xlsx"), sheet = "2. CRUISE_INSTRUMENT")
+tinro_event_info <- read_excel(here("IYS_data_template", "IYS2022_TINRO.xlsx"), sheet = "4. SAMPLING EVENT INFO")
+tinro_catch <- read_excel(here("IYS_data_template", "IYS2022_TINRO.xlsx"), sheet = "5. CATCH_FINAL INFO")
+tinro_specimen <- read_excel(here("IYS_data_template", "IYS2022_TINRO.xlsx"), sheet = "6. SPECIMEN INFO")
 ```
 
 Lets make the Event Core for the Trawl data collected. Please note that for the other Event Types (Bongo, Juday, CTD and Rosette) you can use the same 
 
 ```{r TINRO-event, eval = FALSE}
 tinro_event_info <- tinro_event_info %>% filter(Event_Type == "Trawl")
-tinro_event_info$Time_Start <- strftime(tinro_event_info$Time_Start, "%H:%M:%S")
-tinro_event_info$Time_End <- strftime(tinro_event_info$Time_End, "%H:%M:%S")
+tinro_event_info$Time_Start <- strftime(tinro_event_info$Time_Start, "%H:%M:%S", tz = "UTC") # Use tz = "UTC" because otherwise the times are adjusted.
+tinro_event_info$Time_End <- strftime(tinro_event_info$Time_End, "%H:%M:%S", tz = "UTC")
 
 tinro_event_info$Year <- as.character(tinro_event_info$Year)
 tinro_event_info$Month <- as.character(tinro_event_info$Month)
 tinro_event_info$Day <- as.character(tinro_event_info$Day)
 tinro_event_info <- tinro_event_info %>%
   mutate(eventDate_start = paste(Year, Month, Day, sep = "-")) %>%
-  mutate(eventDate_start = format_iso_8601(as.POSIXct(paste(eventDate_start, Time_Start))),
+  mutate(eventDate_start = format_iso_8601(as.POSIXct(paste(eventDate_start, Time_Start), tz = "UTC")),
          eventDate_start = str_replace(eventDate_start, "\\+00:00", "+12"),
          eventDate_finish = paste(Year, Month, Day, sep = "-")) %>%
-  mutate(eventDate_finish = format_iso_8601(as.POSIXct(paste(eventDate_finish, Time_End))),
-         eventDate_finish = str_replace(eventDate_finish, "\\+00:00", "+12")) # ToDO: Check for events that spanned across multiple days.
+  mutate(eventDate_finish = format_iso_8601(as.POSIXct(paste(eventDate_finish, Time_End), tz = "UTC")),
+         eventDate_finish = str_replace(eventDate_finish, "\\+00:00", "+12")) 
+```
 
+Confirm that the times and dates have been standardized correctly. In particular, confirm no sampling events spanned multiple days, and if so, fix accordingly:
+
+``` {r trawl dates, eval = FALSE}
+time_QAQC <- tinro_event_info %>% select(Station, Year, Month, Day, Time_Start, Time_End, eventDate_start, eventDate_finish) %>% print() 
+
+# Change dates manually for Station 23
+station23 <- tinro_event_info %>% filter(Station == 23) %>%
+  mutate(eventDate_finish = as.Date(eventDate_finish) + 1) %>%
+  mutate(eventDate_finish = paste0(eventDate_finish, "T", Time_End, "+12"))
+
+tinro_event_info <- subset(tinro_event_info, Station != 23)
+tinro_event_info <- rbind(tinro_event_info, station23) %>% arrange(Station)
+
+# Create final eventDate and QC
 tinro_event_info <- tinro_event_info %>%
   mutate(eventDate = paste(eventDate_start, eventDate_finish, sep = "/"))
+obistools::check_eventdate(tinro_event_info)
+```
 
-# The coordinates associated to the trawl need to be presented in a LINESTRING.
-# END_LONGITUDE_DD needs to be inverted (has to be between -180 and 180, inclusive). 
+Create Event Core.
+
+``` {r event, eval = FALSE}
 tinro_event_info_coordinates <- tinro_event_info %>%
   select(eventID = Station_Event_ID,
          Latitude_Start_DecDeg,
@@ -69,33 +82,22 @@ tinro_event_info_linestring <- cbind(tinro_event_info_coordinates, tinro_event_i
 
 tinro2022_event <- tinro_event_info %>%
   select(eventID = Station_Event_ID,
-         eventDate,
-         Year,
-         Month,
-         Day,
+         eventDate, Year, Month, Day,
          minimumDepthInMeters = Minimum_Sampling_Depth_Meters,
          maximumDepthInMeters = Maximum_Sampling_Depth_Meters) %>%
   left_join(tinro_event_info_linestring, by = "eventID") %>%
   mutate(basisOfRecord = "HumanObservation") %>%
   distinct(eventID, .keep_all = TRUE)
 
-# Save locally and on Google Drive:
-write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
+# write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
 ```
 
 Always good to add in some QAQC to ensure the Event Core does not contain any duplicate eventIDs, weird dates or observations on land.
 
 ```{r eventCore QAQC, eval = FALSE}
-report <- obistools::report(tinro2022_event)
-print(report)
-
+report <- obistools::report(tinro2022_event) %>% print()
 eventid <- obistools::check_eventids(tinro2022_event)
-
-eventdate <- obistools::check_eventdate(tinro2022_event)
-print(eventdate)
-
-depth <- obistools::check_depth(tinro2022_event)
-print(depth)
+depth <- obistools::check_depth(tinro2022_event) %>% print()
 ```
 
 Next, create the occurrence extension for the overall taxa observed in the catches. 
@@ -111,7 +113,6 @@ tinro_occ <- tinro_catch %>%
          identifiedBy,
          dateIdentified) # Include individualCount?
 
-# Two scientific names include "sp.", which would make it difficult to match with WoRMS LSID. Therefore we remove this from scientific names, but include it under the identificationQualifier:
 tinro_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_occ$scientificName), "sp. inc.", NA)
 tinro_occ$scientificName <- gsub(" sp.", "", tinro_occ$scientificName)
 
@@ -125,17 +126,17 @@ worms <- worrms::wm_records_names(unique(tinro_occ$scientificName)) %>% bind_row
          scientificNameID = lsid)
 
 tinro_occ_fnl <- left_join(tinro_occ, worms, by = "scientificName") %>%
-  mutate(specificEpithet = stringr::word(tinro_occ_fnl$scientificName, 2),
+  mutate(specificEpithet = stringr::word(scientificName, 2),
          occurrenceStatus = "present")
 
 # Save locally and on Google Drive:
-write_csv(tinro_occ_fnl, "tinro2022_trawl_occ.csv")
+# write_csv(tinro_occ_fnl, "tinro2022_trawl_occ.csv")
 ```
 
 Next, create an occurrence extension for the individual specimen that were identified and measured. This occurrence extension will then have to be combined with the overall catch occurrence extension:
 
 ```{r specimen, eval=FALSE}
-tinro_specimen <- read_excel("IYS2022_TINRO.xlsx", sheet = "6. SPECIMEN INFO") %>%
+tinro_specimen <- tinro_specimen %>%
   select(eventID = Station_Event_ID,
          occurrenceID = Specimen_ID,
          scientificName = Scientific_Name,
@@ -144,11 +145,9 @@ tinro_specimen <- read_excel("IYS2022_TINRO.xlsx", sheet = "6. SPECIMEN INFO") %
          sex = Sex,
          lifeStage = Lifestage)
 
-#Two scientific names include "sp.", which would make it difficult to match with WoRMS LSID. Therefore we remove this from scientific names, but include it under the identificationQualifier:
 tinro_specimen$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_specimen$scientificName), "sp. inc.", NA)
 tinro_specimen$scientificName <- gsub(" sp.", "", tinro_specimen$scientificName)
 
-# Similar to the overall catch, change two taxa names:
 tinro_specimen$scientificName <- gsub("Phacellophora camtshchatica", "Phacellophora camtschatica", tinro_specimen$scientificName)
 tinro_specimen$scientificName <- gsub("Oncorhynchus tschawytscha", "Oncorhynchus tshawytscha", tinro_specimen$scientificName)
 
@@ -160,7 +159,7 @@ worms_specimen <- worrms::wm_records_names(unique(tinro_specimen$scientificName)
 
 tinro_specimen_fnl <- left_join(tinro_specimen, worms_specimen, by = "scientificName")
 tinro_specimen_fnl <- tinro_specimen_fnl %>%
-  mutate(specificEpithet = stringr::word(tinro_specimen_fnl$scientificName, 2),
+  mutate(specificEpithet = stringr::word(scientificName, 2),
          occurrenceStatus = "present",
          individualCount = 1)
 ```
@@ -175,7 +174,7 @@ order <- stringr::str_sort(tinro2022_trawl_occ$occurrenceID, numeric=TRUE)
 tinro2022_trawl_occ <- tinro2022_trawl_occ[match(order, tinro2022_trawl_occ$occurrenceID),]
 
 # Save the occurrence Core locally and in Google Drive:
-write_csv(tinro2022_trawl_occ, "tinro2022_trawl_occ.csv")
+# write_csv(tinro2022_trawl_occ, "tinro2022_trawl_occ.csv")
 ```
 
 Create a resourceRelationship extension data table to indicate that specimen data are part of the overall catch data:
@@ -204,7 +203,7 @@ tinro_resourceRelationship <- tinro_resourceRelationship %>%
          resourceRelationshipID = paste(resourceRelationshipID, ID, sep = ":")) %>%
   select(eventID, resourceRelationshipID, resourceID, relationshipOfResource, relatedResourceID)
 
-write_csv(tinro_resourceRelationship, "tinro_resourceRelationship.csv")
+# write_csv(tinro_resourceRelationship, "tinro_resourceRelationship.csv")
 ```
 
 Create an extended measurementOrFact (eMOF) extension, by creating multiple data tables and combining them:
