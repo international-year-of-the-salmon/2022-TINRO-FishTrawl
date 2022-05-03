@@ -89,7 +89,7 @@ tinro2022_event <- tinro_event_info %>%
   mutate(basisOfRecord = "HumanObservation") %>%
   distinct(eventID, .keep_all = TRUE)
 
-# write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
+write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
 ```
 
 Always good to add in some QAQC to ensure the Event Core does not contain any duplicate eventIDs, weird dates or observations on land.
@@ -122,7 +122,6 @@ tinro_occ$scientificName <- gsub("Phacellophora camtshchatica", "Phacellophora c
 tinro_occ$scientificName <- gsub("Oncorhynchus tschawytscha", "Oncorhynchus tshawytscha", tinro_occ$scientificName)
 worms <- worrms::wm_records_names(unique(tinro_occ$scientificName)) %>% bind_rows() %>%
   select(scientificName = scientificname,
-         individualCount,
          scientificNameAuthorship = authority,
          kingdom, phylum, class, order, family, genus,
          scientificNameID = lsid)
@@ -130,15 +129,12 @@ worms <- worrms::wm_records_names(unique(tinro_occ$scientificName)) %>% bind_row
 tinro_occ_fnl <- left_join(tinro_occ, worms, by = "scientificName") %>%
   mutate(specificEpithet = stringr::word(scientificName, 2),
          occurrenceStatus = "present")
-
-# Save locally and on Google Drive:
-# write_csv(tinro_occ_fnl, "tinro2022_trawl_occ.csv")
 ```
 
 Next, create an occurrence extension for the individual specimen that were identified and measured. This occurrence extension will then have to be combined with the overall catch occurrence extension:
 
 ```{r specimen, eval=FALSE}
-tinro_specimen <- tinro_specimen %>%
+tinro_specimen_occ <- tinro_specimen %>%
   select(eventID = Station_Event_ID,
          occurrenceID = Specimen_ID,
          scientificName = Scientific_Name,
@@ -147,19 +143,19 @@ tinro_specimen <- tinro_specimen %>%
          sex = Sex,
          lifeStage = Lifestage)
 
-tinro_specimen$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_specimen$scientificName), "sp. inc.", NA)
-tinro_specimen$scientificName <- gsub(" sp.", "", tinro_specimen$scientificName)
+tinro_specimen_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_specimen_occ$scientificName), "sp. inc.", NA)
+tinro_specimen_occ$scientificName <- gsub(" sp.", "", tinro_specimen_occ$scientificName)
 
-tinro_specimen$scientificName <- gsub("Phacellophora camtshchatica", "Phacellophora camtschatica", tinro_specimen$scientificName)
-tinro_specimen$scientificName <- gsub("Oncorhynchus tschawytscha", "Oncorhynchus tshawytscha", tinro_specimen$scientificName)
+tinro_specimen_occ$scientificName <- gsub("Phacellophora camtshchatica", "Phacellophora camtschatica", tinro_specimen_occ$scientificName)
+tinro_specimen_occ$scientificName <- gsub("Oncorhynchus tschawytscha", "Oncorhynchus tshawytscha", tinro_specimen_occ$scientificName)
 
-worms_specimen <- worrms::wm_records_names(unique(tinro_specimen$scientificName)) %>% bind_rows() %>%
+worms_specimen <- worrms::wm_records_names(unique(tinro_specimen_occ$scientificName)) %>% bind_rows() %>%
   select(scientificName = scientificname,
          scientificNameAuthorship = authority,
          kingdom, phylum, class, order, family, genus,
          scientificNameID = lsid)
 
-tinro_specimen_fnl <- left_join(tinro_specimen, worms_specimen, by = "scientificName")
+tinro_specimen_fnl <- left_join(tinro_specimen_occ, worms_specimen, by = "scientificName")
 tinro_specimen_fnl <- tinro_specimen_fnl %>%
   mutate(specificEpithet = stringr::word(scientificName, 2),
          occurrenceStatus = "present",
@@ -175,8 +171,7 @@ tinro2022_trawl_occ <- dplyr::bind_rows(tinro_occ_fnl, tinro_specimen_fnl)
 order <- stringr::str_sort(tinro2022_trawl_occ$occurrenceID, numeric=TRUE)
 tinro2022_trawl_occ <- tinro2022_trawl_occ[match(order, tinro2022_trawl_occ$occurrenceID),]
 
-# Save the occurrence Core locally and in Google Drive:
-# write_csv(tinro2022_trawl_occ, "tinro2022_trawl_occ.csv")
+write_csv(tinro2022_trawl_occ, here("standardized_data", "tinro2022_trawl_occ.csv"))
 ```
 
 Create a resourceRelationship extension data table to indicate that specimen data are part of the overall catch data:
@@ -205,7 +200,7 @@ tinro_resourceRelationship <- tinro_resourceRelationship %>%
          resourceRelationshipID = paste(resourceRelationshipID, ID, sep = ":")) %>%
   select(eventID, resourceRelationshipID, resourceID, relationshipOfResource, relatedResourceID)
 
-# write_csv(tinro_resourceRelationship, "tinro_resourceRelationship.csv")
+write_csv(tinro_resourceRelationship, here("standardized_data", "tinro2022_resourceRelationship.csv"))
 ```
 
 Create an extended measurementOrFact (eMOF) extension, by creating multiple data tables and combining them:
@@ -418,7 +413,7 @@ tinro2022_specimen_emof <- tinro_specimen %>%
          measurementUnit, measurementUnitID)
 ```
 
-Combine the emof data tables:
+Combine the emof data tables and save:
 
 ```{r TINRO Trawl emof, eval = FALSE}
 tinro2022_trawl_eMOF_sampling <- dplyr::bind_rows(tinro_trawl2022_rv,
@@ -427,6 +422,8 @@ tinro2022_trawl_eMOF_sampling <- dplyr::bind_rows(tinro_trawl2022_rv,
                                    tinro2022_env)
 tinro2022_trawl_eMOF_catch <- dplyr::bind_rows(tinro2022_trawl_allcatch_emof, 
                                    tinro2022_specimen_emof)
+
+write_csv(tinro2022_trawl_eMOF_catch, here("standardized_data", "tinro2022_eMOF.csv"))
 ```
 
 
