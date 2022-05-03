@@ -111,7 +111,8 @@ tinro_occ <- tinro_catch %>%
          Lifestage,
          vernacularName = common_name,
          identifiedBy,
-         dateIdentified) # Include individualCount?
+         dateIdentified,
+         individualCount = Catch_count) # Include individualCount?
 
 tinro_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_occ$scientificName), "sp. inc.", NA)
 tinro_occ$scientificName <- gsub(" sp.", "", tinro_occ$scientificName)
@@ -121,6 +122,7 @@ tinro_occ$scientificName <- gsub("Phacellophora camtshchatica", "Phacellophora c
 tinro_occ$scientificName <- gsub("Oncorhynchus tschawytscha", "Oncorhynchus tshawytscha", tinro_occ$scientificName)
 worms <- worrms::wm_records_names(unique(tinro_occ$scientificName)) %>% bind_rows() %>%
   select(scientificName = scientificname,
+         individualCount,
          scientificNameAuthorship = authority,
          kingdom, phylum, class, order, family, genus,
          scientificNameID = lsid)
@@ -212,13 +214,11 @@ Create an extended measurementOrFact (eMOF) extension, by creating multiple data
 tinro_trawl2022_rv <- tinro_event_info %>% filter(Event_Type == "Trawl") %>%
   select(eventID = Station_Event_ID,
          measurementValue = Vessel_Name_Abbr) %>%
-  mutate_all(as.character) %>%
   mutate(measurementType = "Research Vessel",
          measurementTypeID = "http://vocab.nerc.ac.uk/collection/L06/current/31/",
          measurementValueID = "http://vocab.nerc.ac.uk/collection/C17/current/90TN/", #deprecated so have to find replacement..?
          measurementUnit = NA,
-         measurementUnitID = NA) %>%
-  distinct()
+         measurementUnitID = NA) %>% distinct()
 ```
 
 Next, information on bottomdepth during the trawl is added:
@@ -246,17 +246,19 @@ Sampling instrument parameters:
 
 ```{r sampling instrument, eval = FALSE}
 tinro_sampling_stations <- tinro_event_info %>% filter(Event_Type == "Trawl") %>% select(Station_Event_ID)
+
 tinro_samplingInstrument <-  tinro_data_dictionary %>% filter(`Cruise / Instrument` == "Trawl") %>%
   filter(Attribute %in% c("Gear_type", "Mesh_Size", "Cod-end_Mesh_Size", "Net_Length", "Net_Width", "Net_Height")) %>%
   select(measurementType = Attribute, 
          measurementValue = Value)
+
 tinro_samplingInstrument <- merge(tinro_sampling_stations, tinro_samplingInstrument) %>%
   rename(eventID = Station_Event_ID) %>%
   mutate_all(as.character) %>%
   mutate(measurementTypeID = case_when(
     measurementType == "Gear_type" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
-    measurementType == "Mesh_Size" ~ " ",
-    measurementType == "Cod-end_Mesh_Size" ~ " ",
+    measurementType == "Mesh_Size" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
+    measurementType == "Cod-end_Mesh_Size" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/", # Same as above...
     measurementType == "Net_Length" ~ " ",
     measurementType == "Net_Width" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100014/",
     measurementType == "Net_Height" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100013/"),
@@ -281,9 +283,8 @@ tinro_trawl2022_samplingEffort <- tinro_event_info %>% filter(Event_Type == "Tra
          Sampling_Duration_Minutes,
          Tow_speed_kilometers_per_hour,
          Tow_distance_nautical_miles)
-tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- format(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes, "%H")
-tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- as.numeric(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes)
-tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- round(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes * 60) #Ugly code -> rewrite!
+tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- format(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes, "%H") %>% as.numeric()
+tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- round(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes * 60)
 
 tinro_trawl2022_samplingEffort <- tinro_trawl2022_samplingEffort %>%
   mutate_all(as.character) %>%
@@ -377,7 +378,6 @@ tinro2022_trawl_allcatch_emof <- tinro_catch %>%
 Next, create the emof for specimen data:
 
 ```{r TINRO Specimen emof, eval = FALSE}
-tinro_specimen <- read_excel("IYS2022_TINRO.xlsx", sheet = "6. SPECIMEN INFO")
 tinro2022_specimen_emof <- tinro_specimen %>%
   select(eventID = Station_Event_ID, 
          occurrenceID = Specimen_ID,
