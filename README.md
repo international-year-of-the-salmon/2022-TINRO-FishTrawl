@@ -1,6 +1,6 @@
 ## Hi there 👋
 
-🙋 Welcome to the repository for the Fish Trawl data from the R/V TINRO collected in 2022 as part of the International Year of the Salmon High Seas Expedition.
+🙋 Welcome to the repository for the Trawl data from the R/V TINRO collected in 2022 as part of the International Year of the Salmon High Seas Expedition.
 
 🤖 See the metadata record for this dataset here: 
 
