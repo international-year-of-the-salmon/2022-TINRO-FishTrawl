@@ -2,6 +2,8 @@
 
 🙋 Welcome to the repository for the Fish Trawl data from the R/V TINRO collected in 2022 as part of the International Year of the Salmon High Seas Expedition.
 
+🤖 See the metadata record for this dataset here: 
+
 🐟 The repository is structured as follows: 
   * `original_data` contains processed data files that have been sent to the IYS Data Scientists that have not been formatted to the IYS Data Template.
   * `IYS_data_template` contains the processed data files that have been provided in the IYS Data Template.
