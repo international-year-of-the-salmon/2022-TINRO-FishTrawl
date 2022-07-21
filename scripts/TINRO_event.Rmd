@@ -115,7 +115,7 @@ tinro_occ <- tinro_catch %>%
          vernacularName = common_name,
          identifiedBy,
          dateIdentified,
-         individualCount = Catch_count) # Include individualCount?
+         individualCount = Catch_count) 
 
 tinro_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_occ$scientificName), "sp. inc.", NA)
 tinro_occ$scientificName <- gsub(" sp.", "", tinro_occ$scientificName)
@@ -161,8 +161,7 @@ worms_specimen <- worrms::wm_records_names(unique(tinro_specimen_occ$scientificN
 tinro_specimen_fnl <- left_join(tinro_specimen_occ, worms_specimen, by = "scientificName")
 tinro_specimen_fnl <- tinro_specimen_fnl %>%
   mutate(specificEpithet = stringr::word(scientificName, 2),
-         occurrenceStatus = "present",
-         individualCount = 1)
+         occurrenceStatus = "present")
 ```
 
 Combine both occurrence extensions into a single data table: 
@@ -175,6 +174,9 @@ tinro2022_trawl_occ <- dplyr::bind_rows(tinro_occ_fnl, tinro_specimen_fnl) %>%
 order <- stringr::str_sort(tinro2022_trawl_occ$occurrenceID, numeric=TRUE)
 tinro2022_trawl_occ <- tinro2022_trawl_occ[match(order, tinro2022_trawl_occ$occurrenceID),]
 
+# Remove the NAs from the individualCount column:
+tinro2022_trawl_occ$individualCount[is.na(tinro2022_trawl_occ$individualCount)] <- ""
+
 write_csv(tinro2022_trawl_occ, here("standardized_data", "tinro2022_trawl_occ.csv"))
 ```
 
@@ -182,8 +184,8 @@ Create a resourceRelationship extension data table to indicate that specimen dat
 
 ```{r resourceRelationship, eval = FALSE}
 tinro_resourceRelationship <- tinro2022_trawl_occ %>%
-  select(eventID, occurrenceID, scientificName) %>%
-  mutate(resourceID = ifelse(!is.na(tinro2022_trawl_occ$individualCount), tinro2022_trawl_occ$occurrenceID, NA)) %>%
+  select(eventID, occurrenceID, scientificName, individualCount) %>%
+  mutate(resourceID = ifelse(tinro2022_trawl_occ$individualCount == "", tinro2022_trawl_occ$occurrenceID, NA)) %>%
   group_by(eventID, scientificName) %>%
   filter(n() != 1) %>%
   ungroup()
@@ -217,7 +219,8 @@ tinro_trawl2022_rv <- tinro_event_info %>% filter(Event_Type == "Trawl") %>%
          measurementTypeID = "http://vocab.nerc.ac.uk/collection/L06/current/31/",
          measurementValueID = "http://vocab.nerc.ac.uk/collection/C17/current/90TN/", #deprecated so have to find replacement..?
          measurementUnit = NA,
-         measurementUnitID = NA) %>% distinct()
+         measurementUnitID = NA,
+         measurementID = paste(eventID, measurementType, sep = "-")) %>% distinct()
 ```
 
 Next, information on bottomdepth during the trawl is added:
@@ -225,7 +228,7 @@ Next, information on bottomdepth during the trawl is added:
 ```{r TINRO bottomdepth, eval = FALSE}
 tinro_trawl2022_bottomdepth <- tinro_event_info %>% filter(Event_Type == "Trawl") %>%
   select(eventID = Station_Event_ID,
-         Bottom_Depth_Meters = `Bottom_Depth*_Meters`) %>%
+         Bottom_Depth_Meters) %>%
   mutate_all(as.character) %>%
   pivot_longer(cols = Bottom_Depth_Meters,
                names_to = "measurementType",
@@ -418,23 +421,17 @@ tinro2022_specimen_emof <- tinro_specimen %>%
 Combine the emof data tables and save:
 
 ```{r TINRO Trawl emof, eval = FALSE}
-tinro2022_trawl_eMOF_sampling <- dplyr::bind_rows(tinro_trawl2022_rv,
+tinro2022_trawl_eMOF_sampling <- dplyr::bind_rows(
+                                   tinro_trawl2022_rv,
                                    tinro_trawl2022_bottomdepth,
+                                   tinro_samplingInstrument,
                                    tinro_trawl2022_samplingEffort,
                                    tinro2022_env)
+
 tinro2022_trawl_eMOF_catch <- dplyr::bind_rows(tinro2022_trawl_allcatch_emof, 
                                    tinro2022_specimen_emof)
 
-write_csv(tinro2022_trawl_eMOF_catch, here("standardized_data", "tinro2022_eMOF.csv"))
+tinro2022_eMOF <- dplyr::bind_rows(tinro2022_trawl_eMOF_sampling, tinro2022_trawl_eMOF_catch)
+
+write_csv(tinro2022_eMOF, here("standardized_data", "tinro2022_eMOF.csv"))
 ```
-
-
-
-
-
-
-
-
-
-
-
