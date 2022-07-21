@@ -30,6 +30,9 @@ tinro_specimen <- read_excel(here("IYS_data_template", "IYS2022_TINRO.xlsx"), sh
 Lets make the Event Core for the Trawl data collected. Please note that for the other Event Types (Bongo, Juday, CTD and Rosette) you can use the same 
 
 ```{r TINRO-event, eval = FALSE}
+# For some reason, the Sampling_Duration_Minutes output is 0.04166667 - this has to be changed to accurately reflect minutes:
+tinro_event_info$Sampling_Duration_Minutes <- difftime(tinro_event_info$Time_End, tinro_event_info$Time_Start, unit="mins") %>% as.numeric() %>% round()
+
 tinro_event_info <- tinro_event_info %>% filter(Event_Type == "Trawl")
 tinro_event_info$Time_Start <- strftime(tinro_event_info$Time_Start, "%H:%M:%S", tz = "UTC") # Use tz = "UTC" because otherwise the times are adjusted.
 tinro_event_info$Time_End <- strftime(tinro_event_info$Time_End, "%H:%M:%S", tz = "UTC")
@@ -43,7 +46,7 @@ tinro_event_info <- tinro_event_info %>%
          eventDate_start = str_replace(eventDate_start, "\\+00:00", "+12"),
          eventDate_finish = paste(Year, Month, Day, sep = "-")) %>%
   mutate(eventDate_finish = format_iso_8601(as.POSIXct(paste(eventDate_finish, Time_End), tz = "UTC")),
-         eventDate_finish = str_replace(eventDate_finish, "\\+00:00", "+12")) 
+         eventDate_finish = str_replace(eventDate_finish, "\\+00:00", "+12"))
 ```
 
 Confirm that the times and dates have been standardized correctly. In particular, confirm no sampling events spanned multiple days, and if so, fix accordingly:
@@ -86,7 +89,7 @@ tinro2022_event <- tinro_event_info %>%
          minimumDepthInMeters = Minimum_Sampling_Depth_Meters,
          maximumDepthInMeters = Maximum_Sampling_Depth_Meters) %>%
   left_join(tinro_event_info_linestring, by = "eventID") %>%
-  mutate(basisOfRecord = "HumanObservation") %>%
+  mutate(geodeticDatum = "WGS84") %>%
   distinct(eventID, .keep_all = TRUE)
 
 write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
@@ -165,7 +168,8 @@ tinro_specimen_fnl <- tinro_specimen_fnl %>%
 Combine both occurrence extensions into a single data table: 
 
 ```{r final tinro catch, eval = FALSE}
-tinro2022_trawl_occ <- dplyr::bind_rows(tinro_occ_fnl, tinro_specimen_fnl)
+tinro2022_trawl_occ <- dplyr::bind_rows(tinro_occ_fnl, tinro_specimen_fnl) %>%
+  mutate(basisOfRecord = "HumanObservation")
 
 # To re-order the occurrenceID, use following code:
 order <- stringr::str_sort(tinro2022_trawl_occ$occurrenceID, numeric=TRUE)
@@ -278,8 +282,6 @@ tinro_trawl2022_samplingEffort <- tinro_event_info %>% filter(Event_Type == "Tra
          Sampling_Duration_Minutes,
          Tow_speed_kilometers_per_hour,
          Tow_distance_nautical_miles)
-tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- format(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes, "%H") %>% as.numeric()
-tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes <- round(tinro_trawl2022_samplingEffort$Sampling_Duration_Minutes * 60)
 
 tinro_trawl2022_samplingEffort <- tinro_trawl2022_samplingEffort %>%
   mutate_all(as.character) %>%
