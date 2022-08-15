@@ -450,6 +450,12 @@ tinro2022_trawl_eMOF_catch <- dplyr::bind_rows(tinro2022_trawl_allcatch_emof,
 
 tinro2022_eMOF <- dplyr::bind_rows(tinro2022_trawl_eMOF_sampling, tinro2022_trawl_eMOF_catch)
 
+# Remove NA and replace with empty cells:
+tinro2022_eMOF <- sapply(tinro2022_eMOF, as.character)
+tinro2022_eMOF[is.na(tinro2022_eMOF)] <- ""
+tinro2022_eMOF <- as.data.frame(tinro2022_eMOF)
+
+
 # Drop any measurementValue fields with NAs - these are not informative. 
 tinro2022_eMOF <- tinro2022_eMOF %>% filter(!is.na(measurementValue))
 
