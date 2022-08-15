@@ -87,9 +87,14 @@ tinro2022_event <- tinro_event_info %>%
   select(eventID = Station_Event_ID,
          eventDate, Year, Month, Day,
          minimumDepthInMeters = Minimum_Sampling_Depth_Meters,
-         maximumDepthInMeters = Maximum_Sampling_Depth_Meters) %>%
+         maximumDepthInMeters = Maximum_Sampling_Depth_Meters,
+         sampleSizeValue = Sampling_Duration_Minutes) %>%
   left_join(tinro_event_info_linestring, by = "eventID") %>%
-  mutate(geodeticDatum = "WGS84") %>%
+  mutate(geodeticDatum = "WGS84",
+         institutionCode = "TINRO",
+         institutionID = "https://edmo.seadatanet.org/report/917",
+         samplingEffort = "midwater trawl",
+         sampleSizeUnit = "minutes") %>%
   distinct(eventID, .keep_all = TRUE)
 
 write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
@@ -201,9 +206,9 @@ order <- stringr::str_sort(tinro_resourceRelationship$resourceID, numeric = TRUE
 
 tinro_resourceRelationship <- tinro_resourceRelationship[match(order, tinro_resourceRelationship$resourceID),]
 tinro_resourceRelationship <- tinro_resourceRelationship %>%
-  mutate(resourceRelationshipID = paste(relatedResourceID, "rr", sep = ":"),
+  mutate(resourceRelationshipID = paste(relatedResourceID, "rr", sep = "-"),
          ID = sprintf("%03d", row_number()),
-         resourceRelationshipID = paste(resourceRelationshipID, ID, sep = ":")) %>%
+         resourceRelationshipID = paste(resourceRelationshipID, ID, sep = "-")) %>%
   select(eventID, resourceRelationshipID, resourceID, relationshipOfResource, relatedResourceID)
 
 write_csv(tinro_resourceRelationship, here("standardized_data", "tinro2022_resourceRelationship.csv"))
@@ -260,7 +265,7 @@ tinro_samplingInstrument <- merge(tinro_sampling_stations, tinro_samplingInstrum
   mutate(measurementTypeID = case_when(
     measurementType == "Gear_type" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100002/",
     measurementType == "Mesh_Size" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/",
-    measurementType == "Cod-end_Mesh_Size" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/", # Same as above...
+    measurementType == "Cod-end_Mesh_Size" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100015/", 
     measurementType == "Net_Length" ~ " ",
     measurementType == "Net_Width" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100014/",
     measurementType == "Net_Height" ~ "http://vocab.nerc.ac.uk/collection/Q01/current/Q0100013/"),
@@ -383,25 +388,37 @@ tinro2022_specimen_emof <- tinro_specimen %>%
          occurrenceID = Specimen_ID,
          Sex,
          lifeStage = Lifestage,
-         Specimen_Forklength = Specimen_Length,
-         Specimen_StandardLength = Specimen_Length2,
+         Specimen_Length,
+         Specimen_Length2,
+         Specimen_Weight,
+         Specimen_Weight_without_organs = Specimen_Weight2,
          individualCount = Number_measured,
-         Specimen_Weight) %>%
+         Length_Type, Length_Type2) %>%
   mutate_all(as.character) %>%
-  pivot_longer(cols = Sex:Specimen_Weight,
+  pivot_longer(cols = Sex:individualCount,
                names_to = "measurementType",
                values_to = "measurementValue") %>%
   mutate(measurementID = paste(occurrenceID, measurementType, sep = "-"),
+         measurementType = ifelse(measurementType == "Specimen_Length" & Length_Type == "Fork length", "Specimen fork length", measurementType),
+         measurementType = ifelse(measurementType == "Specimen_Length" & Length_Type == "Total length", "Specimen total length", measurementType),
+         measurementType = ifelse(measurementType == "Specimen_Length" & Length_Type == "Mantle length", "Specimen mantle length", measurementType),
+         measurementType = ifelse(measurementType == "Specimen_Length" & Length_Type == "Bell diameter", "Specimen bell diameter", measurementType),
+         measurementType = ifelse(measurementType == "Specimen_Length2" & Length_Type2 == "Standard length", "Specimen standard length", measurementType),
          measurementTypeID = case_when(
            measurementType == "Sex" ~ "http://vocab.nerc.ac.uk/collection/P01/current/ENTSEX01/",
            measurementType == "lifeStage" ~ "http://vocab.nerc.ac.uk/collection/P01/current/LSTAGE01/",
-           measurementType == "Specimen_Forklength" ~ "http://vocab.nerc.ac.uk/collection/P01/current/FL01XX01/",
-           measurementType == "Specimen_StandardLength" ~ "http://vocab.nerc.ac.uk/collection/P01/current/SL01XX01/",
+           measurementType == "Specimen total length" ~ "http://vocab.nerc.ac.uk/collection/P01/current/TL01XX01",
+           measurementType == "Specimen fork length" ~ "http://vocab.nerc.ac.uk/collection/P01/current/FL01XX01/",
+           measurementType == "Specimen mantle length" ~ "http://vocab.nerc.ac.uk/collection/P01/current/DML1XX01/",
+           measurementType == "Specimen bell diameter" ~ "http://vocab.nerc.ac.uk/collection/P01/current/OBSINDDM/",
+           measurementType == "Specimen standard length" ~ "http://vocab.nerc.ac.uk/collection/P01/current/SL01XX01/",
            measurementType == "individualCount" ~ "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
-           measurementType == "Specimen_Weight" ~ "http://vocab.nerc.ac.uk/collection/S06/current/S0600088/"),
+           measurementType == "Specimen_Weight" ~ "http://vocab.nerc.ac.uk/collection/S06/current/S0600088/",
+           measurementType == "Specimen_Weight_without_organs" ~ " "),
          measurementUnit = case_when(
-           measurementType == c("Specimen_Forklength", "Specimen_StandardLength") ~ "millimeters",
-           measurementType == "Specimen_Weight" ~ "grams",
+           measurementType %in% c("Specimen fork length", "Specimen total length", "Specimen mantle length",
+                                  "Specimen bell diameter", "Specimen standard length") ~ "millimeters",
+           measurementType %in% c("Specimen_Weight", "Specimen_Weight_without_organs") ~ "grams",
            measurementType == "individualCount" ~ "individuals"),
          measurementUnitID = case_when(
            measurementUnit == "millimeters" ~ "http://vocab.nerc.ac.uk/collection/P06/current/UXMM/",
