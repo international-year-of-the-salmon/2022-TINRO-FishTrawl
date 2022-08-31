@@ -94,7 +94,9 @@ tinro2022_event <- tinro_event_info %>%
          institutionCode = "TINRO",
          institutionID = "https://edmo.seadatanet.org/report/917",
          samplingEffort = "midwater trawl",
-         sampleSizeUnit = "minutes") %>%
+         sampleSizeUnit = "minutes", 
+         bibliographicCitation = "Somov, A., & Pakhomov, E. (2022). Trawl Data from the R/V TINRO during the 2022 International Year of the Salmon Pan-Pacific Winter High Seas Expedition [Data set]. North Pacific Anadromous Fish Commission. https://doi.org/10.21966/wevm-ww19",
+         datasetID = "https://doi.org/10.21966/wevm-ww19") %>%
   distinct(eventID, .keep_all = TRUE)
 
 write_csv(tinro2022_event, here("standardized_data", "tinro2022_event.csv"))
@@ -122,6 +124,7 @@ tinro_occ <- tinro_catch %>%
          dateIdentified,
          individualCount = Catch_count) 
 
+tinro_occ$verbatimIdentification <- tinro_occ$scientificName
 tinro_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_occ$scientificName), "sp. inc.", NA)
 tinro_occ$scientificName <- gsub(" sp.", "", tinro_occ$scientificName)
 
@@ -151,6 +154,7 @@ tinro_specimen_occ <- tinro_specimen %>%
          sex = Sex,
          lifeStage = Lifestage)
 
+tinro_specimen_occ$verbatimIdentification <- tinro_specimen_occ$scientificName
 tinro_specimen_occ$identificationQualifier <- ifelse(grepl("\\b sp.",  tinro_specimen_occ$scientificName), "sp. inc.", NA)
 tinro_specimen_occ$scientificName <- gsub(" sp.", "", tinro_specimen_occ$scientificName)
 
